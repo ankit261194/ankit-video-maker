@@ -128,29 +128,16 @@ def render_full_project(project_data, progress_callback=None, log_callback=None)
             from PIL import Image
             Image.open(base_to_use).convert("RGB").resize((1920, 1080)).save(visual_base)
             
-        # Ken Burns Shot
-        shot_mp4 = os.path.join(temp_dir, f"sc{sc_num}_shot.mp4")
-        d_frames = int(dur * FPS)
-        vf_shot = f"zoompan=z='min(zoom+0.00015,1.15)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={d_frames}:s=1920x1080:fps={FPS}"
-        cmd_shot = [
-            FFMPEG, "-y",
-            "-i", visual_base,
-            "-vf", vf_shot,
-            "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
-            shot_mp4
-        ]
-        subprocess.run(cmd_shot, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        
-        # Merge Audio (85% VO / 15% BGM) & Burn Subtitles
+        # Ultra-Fast 1080p Video + Audio + Subtitle Composition (Single High-Speed Pass)
         sc_final = os.path.join(temp_dir, f"sc{sc_num}_final.mp4")
         srt_rel = os.path.basename(sc["srt_path"])
-        shot_rel = os.path.basename(shot_mp4)
+        visual_rel = os.path.basename(visual_base)
         audio_rel = os.path.basename(sc["audio_path"])
         bgm_rel = os.path.basename(bgm_path)
         final_rel = os.path.basename(sc_final)
 
         filter_graph = (
-            f"subtitles={srt_rel}:force_style='FontName=Segoe UI,FontSize=28,Bold=1,"
+            f"[0:v]subtitles={srt_rel}:force_style='FontName=Segoe UI,FontSize=28,Bold=1,"
             f"PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=3,MarginV=50'[v];"
             f"[1:a]aresample=44100,aformat=channel_layouts=stereo,volume=0.85[vo];"
             f"[2:a]volume=0.15[bgm];"
@@ -158,7 +145,7 @@ def render_full_project(project_data, progress_callback=None, log_callback=None)
         )
         cmd_merge = [
             FFMPEG, "-y",
-            "-i", shot_rel,
+            "-loop", "1", "-t", str(dur), "-i", visual_rel,
             "-i", audio_rel,
             "-ss", str(sc["bgm_offset"]), "-t", str(dur), "-i", bgm_rel,
             "-filter_complex", filter_graph,
@@ -171,11 +158,11 @@ def render_full_project(project_data, progress_callback=None, log_callback=None)
             subprocess.run(cmd_merge, cwd=temp_dir, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             log(f"   [Subtitles] 1080p dynamic subtitles burned successfully for Scene {sc_num}")
         except subprocess.CalledProcessError:
-            # Fallback in case subtitle engine fails
-            log(f"   [Note] Applied audio-video merge without subtitles for Scene {sc_num}")
+            # Fallback in case subtitle engine encounters font/libass issue
+            log(f"   [Note] Applied audio-video composition without subtitles for Scene {sc_num}")
             cmd_fallback = [
                 FFMPEG, "-y",
-                "-i", shot_rel,
+                "-loop", "1", "-t", str(dur), "-i", visual_rel,
                 "-i", audio_rel,
                 "-ss", str(sc["bgm_offset"]), "-t", str(dur), "-i", bgm_rel,
                 "-filter_complex", "[1:a]aresample=44100,aformat=channel_layouts=stereo,volume=0.85[vo];[2:a]volume=0.15[bgm];[vo][bgm]amix=inputs=2:duration=first:dropout_transition=2[a]",
@@ -196,7 +183,7 @@ def render_full_project(project_data, progress_callback=None, log_callback=None)
     concat_list = os.path.join(temp_dir, "concat.txt")
     with open(concat_list, "w", encoding="utf-8") as f:
         for sf in scene_mp4s:
-            f.write(f"file '{sf.replace(chr(92), '/')}'\n")
+            f.write(f"file '{os.path.basename(sf)}'\n")
 
     target_video_path = final_video_path
     if os.path.exists(target_video_path):
@@ -212,11 +199,11 @@ def render_full_project(project_data, progress_callback=None, log_callback=None)
 
     cmd_concat = [
         FFMPEG, "-y",
-        "-f", "concat", "-safe", "0", "-i", concat_list,
+        "-f", "concat", "-safe", "0", "-i", "concat.txt",
         "-c", "copy",
         target_video_path
     ]
-    subprocess.run(cmd_concat, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.run(cmd_concat, cwd=temp_dir, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     set_progress(0.92)
     
     # 5. Generate Viral SEO Kit Text File
