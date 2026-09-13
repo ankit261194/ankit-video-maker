@@ -1,7 +1,7 @@
 import os
 import datetime
 
-def generate_viral_seo_kit(project_title, topic_keywords, scenes, output_dir):
+def generate_viral_seo_kit(project_title, topic_keywords, scenes=None, output_dir=None):
     """
     Generates a complete YouTube / Instagram / Facebook Viral SEO Kit:
     - 5 High-CTR Curiosity-Gap Titles
@@ -9,9 +9,27 @@ def generate_viral_seo_kit(project_title, topic_keywords, scenes, output_dir):
     - 30 High-Velocity Tags (comma-separated copy-paste ready)
     - High-CTR Thumbnail Design Framework & Visual Prompts
     """
-    os.makedirs(output_dir, exist_ok=True)
-    filename = f"{''.join(c for c in project_title if c.isalnum() or c in (' ', '_')).rstrip()}_VIRAL_SEO_KIT.txt"
-    filepath = os.path.join(output_dir, filename)
+    # Support both (title, kw, scenes, output_dir) and (title, kw, output_path)
+    if isinstance(scenes, str) and output_dir is None:
+        target_path = scenes
+        scenes = []
+        if os.path.isdir(target_path):
+            output_dir = target_path
+            filename = f"{''.join(c for c in project_title if c.isalnum() or c in (' ', '_')).rstrip()}_VIRAL_SEO_KIT.txt"
+            filepath = os.path.join(output_dir, filename)
+        else:
+            filepath = target_path
+            parent_dir = os.path.dirname(filepath)
+            if parent_dir:
+                os.makedirs(parent_dir, exist_ok=True)
+    else:
+        if scenes is None:
+            scenes = []
+        if output_dir is None:
+            output_dir = os.getcwd()
+        os.makedirs(output_dir, exist_ok=True)
+        filename = f"{''.join(c for c in project_title if c.isalnum() or c in (' ', '_')).rstrip()}_VIRAL_SEO_KIT.txt"
+        filepath = os.path.join(output_dir, filename)
 
     # 1. Calculate Timestamps
     timestamps = []
@@ -151,3 +169,7 @@ END OF VIRAL SEO KIT - ANKIT VIDEO MAKER
         f.write(content)
 
     return filepath
+
+# Backward compatibility alias
+generate_seo_kit = generate_viral_seo_kit
+

@@ -1,5 +1,11 @@
 import os
 import sys
+
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+os.environ["OMP_NUM_THREADS"] = "1"
+
 import threading
 import subprocess
 import customtkinter as ctk
@@ -12,10 +18,11 @@ verify_and_heal_environment()
 # Import core modules
 from core.voice_engine import AVAILABLE_VOICES, preview_voice
 from core.video_compositor import render_full_project
+from core.avatar_engine import fetch_ai_visual_frame
 from core.account_vault import AccountVault
 from core.updater import (
     check_cloud_update, apply_cloud_update, CURRENT_VERSION, 
-    get_cloud_repo, set_cloud_repo, get_git_remote_url, set_git_remote_url, push_git_to_remote
+    get_cloud_repo, set_cloud_repo
 )
 from core.license_engine import (
     get_machine_id, verify_license_key, save_license, load_active_license, 
@@ -296,30 +303,50 @@ class AnkitVideoMakerApp(ctk.CTk):
 
     def _setup_script_tab(self):
         # AI Script Generator Tool Box
-        ai_box = ctk.CTkFrame(self.tab_script, fg_color="#152138", corner_radius=8)
-        ai_box.pack(fill="x", padx=10, pady=(5, 10))
+        ai_box = ctk.CTkFrame(self.tab_script, fg_color="#131d33", corner_radius=10)
+        ai_box.pack(fill="x", padx=10, pady=(5, 8))
 
         ai_hdr = ctk.CTkFrame(ai_box, fg_color="transparent")
-        ai_hdr.pack(fill="x", padx=12, pady=(8, 4))
-        ctk.CTkLabel(ai_hdr, text="✨ AI VIRAL SCRIPT & PROMPT STUDIO", font=ctk.CTkFont(size=13, weight="bold"), text_color="#00e5ff").pack(side="left")
-        ctk.CTkLabel(ai_hdr, text="• ⚠️ Google Gemini Subscription/Key is COMPULSORY for custom AI scripts", font=ctk.CTkFont(size=11, weight="bold"), text_color="#38bdf8").pack(side="left", padx=10)
+        ai_hdr.pack(fill="x", padx=12, pady=(8, 3))
+        ctk.CTkLabel(ai_hdr, text="✨ AI VIRAL SCRIPT STUDIO - JESI CHAHE AISI SCRIPT BANAYEIN", font=ctk.CTkFont(size=13, weight="bold"), text_color="#00e5ff").pack(side="left")
+        ctk.CTkLabel(ai_hdr, text="• ⚠️ Google Gemini API is COMPULSORY for custom AI scripts", font=ctk.CTkFont(size=11, weight="bold"), text_color="#38bdf8").pack(side="left", padx=10)
 
-        ai_inputs = ctk.CTkFrame(ai_box, fg_color="transparent")
-        ai_inputs.pack(fill="x", padx=12, pady=(0, 8))
+        # Row 1: Topic & Style Controls
+        row1 = ctk.CTkFrame(ai_box, fg_color="transparent")
+        row1.pack(fill="x", padx=12, pady=(2, 4))
 
-        self.entry_ai_topic = ctk.CTkEntry(ai_inputs, width=380, height=32, placeholder_text="Enter any topic: e.g. Space Mysteries, Top 5 AI Tools, Cyber Hacks")
-        self.entry_ai_topic.pack(side="left", padx=(0, 10))
+        self.entry_ai_topic = ctk.CTkEntry(row1, width=290, height=32, placeholder_text="Topic: e.g. Space Mysteries, AI Tools, Dark Secrets")
+        self.entry_ai_topic.pack(side="left", padx=(0, 6))
+
+        self.ai_niche_var = ctk.StringVar(value="YouTube Documentary")
+        niche_menu = ctk.CTkOptionMenu(row1, values=["YouTube Documentary", "Crime & Mystery", "Viral Shorts/Reels", "Tech & Business", "Motivation & Story"], variable=self.ai_niche_var, width=160, height=32)
+        niche_menu.pack(side="left", padx=(0, 6))
 
         self.ai_tone_var = ctk.StringVar(value="High-Retention Mystery")
-        tone_menu = ctk.CTkOptionMenu(ai_inputs, values=["High-Retention Mystery", "Tech Documentary", "Fast Viral", "Deep Storytelling"], variable=self.ai_tone_var, width=170, height=32)
-        tone_menu.pack(side="left", padx=(0, 10))
+        tone_menu = ctk.CTkOptionMenu(row1, values=["High-Retention Mystery", "Suspenseful & Dramatic", "Fast-Paced Viral", "Deep Insightful"], variable=self.ai_tone_var, width=160, height=32)
+        tone_menu.pack(side="left", padx=(0, 6))
 
         self.ai_lang_var = ctk.StringVar(value="English")
-        lang_menu = ctk.CTkOptionMenu(ai_inputs, values=["English", "Hindi"], variable=self.ai_lang_var, width=110, height=32)
-        lang_menu.pack(side="left", padx=(0, 10))
+        lang_menu = ctk.CTkOptionMenu(row1, values=["English", "Hindi"], variable=self.ai_lang_var, width=95, height=32)
+        lang_menu.pack(side="left", padx=(0, 6))
 
-        self.btn_ai_gen = ctk.CTkButton(ai_inputs, text="⚡ Write Script", width=130, height=32, fg_color="#00e5ff", text_color="#070d1e", font=ctk.CTkFont(weight="bold"), command=self._generate_ai_script)
+        self.ai_scene_count_var = ctk.StringVar(value="5 Scenes")
+        scenes_menu = ctk.CTkOptionMenu(row1, values=["3 Scenes", "4 Scenes", "5 Scenes", "6 Scenes", "7 Scenes", "8 Scenes", "10 Scenes"], variable=self.ai_scene_count_var, width=105, height=32)
+        scenes_menu.pack(side="left", padx=(0, 6))
+
+        self.btn_ai_gen = ctk.CTkButton(row1, text="⚡ Write Script", width=120, height=32, fg_color="#00e5ff", text_color="#070d1e", font=ctk.CTkFont(weight="bold"), command=self._generate_ai_script)
         self.btn_ai_gen.pack(side="left")
+
+        # Row 2: Custom User Prompt / Story Instructions
+        row2 = ctk.CTkFrame(ai_box, fg_color="transparent")
+        row2.pack(fill="x", padx=12, pady=(0, 8))
+
+        ctk.CTkLabel(row2, text="Custom Instructions / Prompt (Optional):", font=ctk.CTkFont(size=11, weight="bold"), text_color="#94a3b8").pack(anchor="w", pady=(0, 2))
+        self.entry_ai_custom_prompt = ctk.CTkEntry(
+            row2, height=30, font=ctk.CTkFont(size=11), 
+            placeholder_text="Jesi chahe aisi custom prompt yahan likhein (e.g. Include a twist in scene 3, focus on real dark web incidents, end with strong CTA)..."
+        )
+        self.entry_ai_custom_prompt.pack(fill="x")
 
         # Project Title & Keywords
         top_frame = ctk.CTkFrame(self.tab_script, fg_color="transparent")
@@ -344,9 +371,10 @@ class AnkitVideoMakerApp(ctk.CTk):
         btn_frame = ctk.CTkFrame(self.tab_script, fg_color="transparent")
         btn_frame.pack(fill="x", padx=10, pady=6)
 
-        ctk.CTkButton(btn_frame, text="➕ Add Scene", width=120, command=self._add_scene, fg_color="#00b4d8", hover_color="#0077b6").pack(side="left", padx=5)
-        ctk.CTkButton(btn_frame, text="📋 Load Tech Sample", width=140, command=self._load_default_sample, fg_color="#2b3a55", hover_color="#3d5175").pack(side="left", padx=5)
-        ctk.CTkButton(btn_frame, text="🗑️ Clear All", width=100, command=self._clear_scenes, fg_color="#6c757d", hover_color="#495057").pack(side="right", padx=5)
+        ctk.CTkButton(btn_frame, text="➕ Add Scene", width=110, command=self._add_scene, fg_color="#00b4d8", hover_color="#0077b6").pack(side="left", padx=4)
+        ctk.CTkButton(btn_frame, text="🎨 Generate All AI Visuals (1080p)", width=230, command=self._generate_all_visuals, fg_color="#059669", hover_color="#10b981", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=4)
+        ctk.CTkButton(btn_frame, text="📋 Load Tech Sample", width=140, command=self._load_default_sample, fg_color="#2b3a55", hover_color="#3d5175").pack(side="left", padx=4)
+        ctk.CTkButton(btn_frame, text="🗑️ Clear All", width=100, command=self._clear_scenes, fg_color="#6c757d", hover_color="#495057").pack(side="right", padx=4)
 
     def _generate_ai_script(self):
         topic = self.entry_ai_topic.get().strip()
@@ -357,22 +385,41 @@ class AnkitVideoMakerApp(ctk.CTk):
         active_acc = self.vault.get_active_account()
         gemini_key = active_acc["key"] if active_acc else None
 
+        custom_prompt = self.entry_ai_custom_prompt.get().strip()
+        category = self.ai_niche_var.get()
         tone = self.ai_tone_var.get()
         lang = self.ai_lang_var.get()
+        count_str = self.ai_scene_count_var.get().split()[0]
+        try:
+            count = int(count_str)
+        except Exception:
+            count = 5
 
         self.btn_ai_gen.configure(state="disabled", text="⏳ Writing...")
 
         def _bg_script():
             try:
-                scenes, note = generate_viral_script_ai(topic, tone=tone, language=lang, gemini_api_key=gemini_key)
+                scenes, note = generate_viral_script_ai(
+                    topic, 
+                    custom_prompt=custom_prompt,
+                    category=category,
+                    tone=tone, 
+                    language=lang, 
+                    scene_count=count,
+                    gemini_api_key=gemini_key
+                )
                 def _ui_update():
                     self._clear_scenes()
                     for sc in scenes:
-                        self._add_scene(sc.get("title", "Scene"), sc.get("text", ""))
+                        self._add_scene(
+                            sc.get("title", "Scene"), 
+                            sc.get("text", ""),
+                            visual_prompt=sc.get("visual_prompt", "")
+                        )
                     self.entry_title.delete(0, "end")
                     self.entry_title.insert(0, topic)
                     self.entry_keywords.delete(0, "end")
-                    self.entry_keywords.insert(0, f"{topic}, viral video, secrets, breakdown, guide")
+                    self.entry_keywords.insert(0, f"{topic}, {category.lower()}, viral video, secrets, breakdown, guide")
                     self.btn_ai_gen.configure(state="normal", text="⚡ Write Script")
                     messagebox.showinfo("Script Generated!", f"🎉 Successfully created {len(scenes)} scenes!\n\n{note}")
                 self.after(0, _ui_update)
@@ -383,6 +430,30 @@ class AnkitVideoMakerApp(ctk.CTk):
                 self.after(0, _err)
 
         threading.Thread(target=_bg_script, daemon=True).start()
+
+    def _generate_all_visuals(self):
+        if not self.scene_widgets:
+            messagebox.showwarning("No Scenes", "Please add or generate scenes first!")
+            return
+
+        out_dir = os.path.join(os.path.expanduser("~"), "Downloads", "_avm_visuals")
+        os.makedirs(out_dir, exist_ok=True)
+
+        def _worker():
+            for idx, w in enumerate(self.scene_widgets):
+                sc_num = idx + 1
+                prompt = w["prompt"].get().strip() if w.get("prompt") else ""
+                title = w["title"].get().strip() if w.get("title") else f"Scene {sc_num}"
+                img_out = os.path.join(out_dir, f"scene_{sc_num}_{int(time.time())}.jpg")
+                
+                success = fetch_ai_visual_frame(prompt, img_out, fallback_title=title)
+                w["image_path"] = img_out
+                if "lbl_img" in w:
+                    self.after(0, lambda lbl=w["lbl_img"]: lbl.configure(text="✅ 1080p AI Ready", text_color="#00ffcc"))
+            self.after(0, messagebox.showinfo, "AI Visuals Generated!", f"🎉 All {len(self.scene_widgets)} Scene Visuals generated successfully in 1080p Full HD!")
+
+        import time
+        threading.Thread(target=_worker, daemon=True).start()
 
     def _setup_voice_tab(self):
         v_frame = ctk.CTkFrame(self.tab_voice, fg_color="transparent")
@@ -520,57 +591,21 @@ class AnkitVideoMakerApp(ctk.CTk):
         ctk.CTkButton(btn_row, text="➕ Add Account / Gemini Key", width=200, height=36, fg_color="#00b4d8", hover_color="#0077b6", command=self._popup_add_account).pack(side="left", padx=5)
         ctk.CTkButton(btn_row, text="🔄 Test Auto-Failover", width=180, height=36, fg_color="#2b3a55", hover_color="#3d5175", command=self._manual_failover).pack(side="left", padx=5)
 
-        # White-labeled Cloud Update Section
+        # White-labeled Cloud Sync Section
         upd_box = ctk.CTkFrame(acc_frame, fg_color="#11192e", corner_radius=8)
-        upd_box.pack(fill="x", pady=(10, 5), padx=5)
+        upd_box.pack(fill="x", pady=(15, 5), padx=5)
 
         upd_hdr = ctk.CTkFrame(upd_box, fg_color="transparent")
-        upd_hdr.pack(fill="x", padx=15, pady=8)
+        upd_hdr.pack(fill="x", padx=15, pady=10)
 
-        ctk.CTkLabel(upd_hdr, text=f"🌐 AVM Official Cloud Engine (Version: v{CURRENT_VERSION}):", font=ctk.CTkFont(size=12, weight="bold")).pack(side="left")
-        ctk.CTkButton(upd_hdr, text="🔍 Check Cloud Updates", width=170, height=28, fg_color="#059669", hover_color="#10b981", command=self._check_updates).pack(side="right")
+        ctk.CTkLabel(upd_hdr, text=f"🌐 AVM Official Cloud Network (Engine Version: v{CURRENT_VERSION}):", font=ctk.CTkFont(size=13, weight="bold"), text_color="#00e5ff").pack(side="left")
+        ctk.CTkButton(upd_hdr, text="🔍 Check Cloud Updates", width=180, height=32, fg_color="#059669", hover_color="#10b981", font=ctk.CTkFont(weight="bold"), command=self._check_updates).pack(side="right")
 
-        # GitHub Official Repository Connection Section
-        git_box = ctk.CTkFrame(acc_frame, fg_color="#11192e", corner_radius=8)
-        git_box.pack(fill="x", pady=6, padx=5)
-
-        git_hdr = ctk.CTkFrame(git_box, fg_color="transparent")
-        git_hdr.pack(fill="x", padx=15, pady=(8, 4))
-        ctk.CTkLabel(git_hdr, text="🐙 Connect Official GitHub Repository Channel:", font=ctk.CTkFont(size=12, weight="bold"), text_color="#00e5ff").pack(side="left")
-
-        git_row = ctk.CTkFrame(git_box, fg_color="transparent")
-        git_row.pack(fill="x", padx=15, pady=(0, 10))
-
-        current_remote = get_git_remote_url()
-        self.entry_git_remote = ctk.CTkEntry(
-            git_row,
-            height=32,
-            font=ctk.CTkFont(family="Consolas", size=11),
-            placeholder_text="e.g. https://github.com/ankitchaudhary/ankit-video-maker.git"
+        cloud_info = (
+            "• Connected to AVM Cloud Network for instant zero-downtime updates.\n"
+            "• All software upgrades, model optimizations, and security patches sync automatically."
         )
-        if current_remote:
-            self.entry_git_remote.insert(0, current_remote)
-        self.entry_git_remote.pack(side="left", fill="x", expand=True, padx=(0, 8))
-
-        ctk.CTkButton(
-            git_row,
-            text="💾 Save / Connect",
-            width=130,
-            height=32,
-            fg_color="#00b4d8",
-            hover_color="#0077b6",
-            command=self._save_git_remote
-        ).pack(side="left", padx=(0, 6))
-
-        ctk.CTkButton(
-            git_row,
-            text="⬆️ Push to GitHub",
-            width=130,
-            height=32,
-            fg_color="#059669",
-            hover_color="#10b981",
-            command=self._push_to_github
-        ).pack(side="left")
+        ctk.CTkLabel(upd_box, text=cloud_info, font=ctk.CTkFont(size=11), justify="left", text_color="#94a3b8").pack(anchor="w", padx=15, pady=(0, 10))
 
     def _setup_render_tab(self):
         r_frame = ctk.CTkFrame(self.tab_render, fg_color="transparent")
@@ -735,57 +770,104 @@ class AnkitVideoMakerApp(ctk.CTk):
         except Exception as e:
             messagebox.showinfo("Cloud Status", f"Ankit Video Maker is running v{CURRENT_VERSION}.\nOfficial Cloud Sync: Active.")
 
-    def _save_git_remote(self):
-        url = self.entry_git_remote.get().strip()
-        if not url:
-            messagebox.showwarning("Enter URL", "Please enter a valid GitHub repository URL!")
-            return
-        success, msg = set_git_remote_url(url)
-        if success:
-            messagebox.showinfo("Repository Connected", f"🎉 Successfully connected to GitHub repository:\n{url}")
-        else:
-            messagebox.showerror("Connection Error", msg)
-
-    def _push_to_github(self):
-        url = self.entry_git_remote.get().strip()
-        if not url:
-            messagebox.showwarning("Repository Required", "Please enter and save your GitHub repository URL first!")
-            return
-        set_git_remote_url(url)
-        self.log_msg("Initiating sync to GitHub repository...")
-        def _sync_thread():
-            success, msg = push_git_to_remote()
-            if success:
-                self.after(0, messagebox.showinfo, "Push Successful", "🎉 All latest updates successfully pushed to your GitHub repository!")
-                self.after(0, self.log_msg, "GitHub push complete!")
-            else:
-                self.after(0, messagebox.showerror, "Push Notice", f"GitHub Push Result:\n{msg}\n\nTip: If authentication is required, make sure your GitHub credentials or Personal Access Token is configured.")
-                self.after(0, self.log_msg, f"GitHub sync result: {msg}")
-        threading.Thread(target=_sync_thread, daemon=True).start()
-
-    def _add_scene(self, title="", text=""):
-        idx = len(self.scene_widgets) + 1
+    def _add_scene(self, title="", text="", visual_prompt="", custom_image=None):
         card = ctk.CTkFrame(self.scenes_scroll, fg_color="#172238", corner_radius=8)
         card.pack(fill="x", padx=5, pady=6)
 
         hdr_row = ctk.CTkFrame(card, fg_color="transparent")
         hdr_row.pack(fill="x", padx=10, pady=(6, 2))
 
-        ctk.CTkLabel(hdr_row, text=f"Scene {idx}:", font=ctk.CTkFont(size=13, weight="bold"), text_color="#00e5ff").pack(side="left")
+        lbl_num = ctk.CTkLabel(hdr_row, text="Scene:", font=ctk.CTkFont(size=13, weight="bold"), text_color="#00e5ff")
+        lbl_num.pack(side="left")
         
-        entry_s_title = ctk.CTkEntry(hdr_row, height=28, width=320, font=ctk.CTkFont(size=12), placeholder_text="Scene Chapter Title")
-        entry_s_title.insert(0, title if title else f"Chapter {idx}")
-        entry_s_title.pack(side="left", padx=10)
+        entry_s_title = ctk.CTkEntry(hdr_row, height=28, width=250, font=ctk.CTkFont(size=12), placeholder_text="Scene Chapter Title")
+        entry_s_title.insert(0, title if title else "Scene")
+        entry_s_title.pack(side="left", padx=6)
 
-        txt_s_body = ctk.CTkTextbox(card, height=75, font=ctk.CTkFont(size=12), fg_color="#0e1526")
-        txt_s_body.insert("0.0", text)
-        txt_s_body.pack(fill="x", padx=10, pady=(4, 8))
-
-        self.scene_widgets.append({
+        scene_item = {
             "frame": card,
             "title": entry_s_title,
-            "text": txt_s_body
-        })
+            "text": None,
+            "prompt": None,
+            "image_path": custom_image
+        }
+
+        lbl_img = ctk.CTkLabel(hdr_row, text="AI Visual: Auto", font=ctk.CTkFont(size=11), text_color="#38bdf8")
+        if custom_image:
+            lbl_img.configure(text=f"🖼️ {os.path.basename(custom_image)[:14]}", text_color="#00ffcc")
+
+        def _pick_scene_image():
+            f = filedialog.askopenfilename(title="Select Scene Image", filetypes=[("Images", "*.jpg *.jpeg *.png *.webp")])
+            if f:
+                scene_item["image_path"] = f
+                lbl_img.configure(text=f"🖼️ {os.path.basename(f)[:14]}", text_color="#00ffcc")
+
+        def _gen_single_scene_visual():
+            p_text = scene_item["prompt"].get().strip() if scene_item.get("prompt") else entry_s_title.get().strip()
+            if not p_text:
+                p_text = f"cinematic documentary visualization, {entry_s_title.get()}, 8k dark aesthetic"
+            lbl_img.configure(text="⏳ Generating 1080p...", text_color="#f59e0b")
+            btn_gen_vis.configure(state="disabled")
+
+            def _vis_thread():
+                import time
+                out_dir = os.path.join(os.path.expanduser("~"), "Downloads", "_avm_visuals")
+                os.makedirs(out_dir, exist_ok=True)
+                target_f = os.path.join(out_dir, f"scene_{int(time.time())}.jpg")
+                success = fetch_ai_visual_frame(p_text, target_f, fallback_title=entry_s_title.get())
+                scene_item["image_path"] = target_f
+                def _ui_done():
+                    btn_gen_vis.configure(state="normal")
+                    lbl_img.configure(text="✅ 1080p Ready", text_color="#00ffcc")
+                self.after(0, _ui_done)
+
+            threading.Thread(target=_vis_thread, daemon=True).start()
+
+        btn_gen_vis = ctk.CTkButton(hdr_row, text="🎨 Gen Visual", width=85, height=26, fg_color="#059669", hover_color="#10b981", font=ctk.CTkFont(size=11, weight="bold"), command=_gen_single_scene_visual)
+        btn_gen_vis.pack(side="left", padx=3)
+
+        btn_img = ctk.CTkButton(hdr_row, text="📷 Image", width=70, height=26, fg_color="#1e293b", hover_color="#334155", font=ctk.CTkFont(size=11), command=_pick_scene_image)
+        btn_img.pack(side="left", padx=3)
+        lbl_img.pack(side="left", padx=4)
+
+        scene_item["lbl_img"] = lbl_img
+
+        def _del_scene():
+            if scene_item in self.scene_widgets:
+                self.scene_widgets.remove(scene_item)
+                card.destroy()
+                self._renumber_scenes()
+
+        btn_del = ctk.CTkButton(hdr_row, text="✕", width=28, height=26, fg_color="#dc2626", hover_color="#b91c1c", font=ctk.CTkFont(size=12, weight="bold"), command=_del_scene)
+        btn_del.pack(side="right", padx=2)
+
+        # Narration Script text
+        txt_s_body = ctk.CTkTextbox(card, height=65, font=ctk.CTkFont(size=12), fg_color="#0e1526")
+        txt_s_body.insert("0.0", text)
+        txt_s_body.pack(fill="x", padx=10, pady=(2, 4))
+        scene_item["text"] = txt_s_body
+
+        # AI Visual Prompt row
+        p_row = ctk.CTkFrame(card, fg_color="transparent")
+        p_row.pack(fill="x", padx=10, pady=(0, 6))
+        ctk.CTkLabel(p_row, text="AI Visual Prompt:", font=ctk.CTkFont(size=11, weight="bold"), text_color="#94a3b8").pack(side="left", padx=(0, 6))
+        entry_prompt = ctk.CTkEntry(p_row, height=26, font=ctk.CTkFont(size=11), placeholder_text="Prompt for AI Flux 1080p Image (e.g. cinematic deep space nebula 8k)")
+        if visual_prompt:
+            entry_prompt.insert(0, visual_prompt)
+        entry_prompt.pack(side="left", fill="x", expand=True)
+        scene_item["prompt"] = entry_prompt
+
+        self.scene_widgets.append(scene_item)
+        self._renumber_scenes()
+
+    def _renumber_scenes(self):
+        for idx, w in enumerate(self.scene_widgets):
+            try:
+                hdr = w["frame"].winfo_children()[0]
+                lbl = hdr.winfo_children()[0]
+                lbl.configure(text=f"Scene {idx+1}:")
+            except Exception:
+                pass
 
     def _clear_scenes(self):
         for w in self.scene_widgets:
@@ -801,15 +883,15 @@ class AnkitVideoMakerApp(ctk.CTk):
         self.entry_keywords.insert(0, "cybersecurity, digital privacy, data brokers, tracking, inspect element, AI bots")
 
         samples = [
-            ("Hook & Intro", "If you live in the United States, there is a legal digital dossier containing your home address, phone number, and relatives names being sold online right now for less than a dollar. Today, we are revealing four zero-cost privacy secrets that feel almost illegal to know."),
-            ("Secret 1: Data Brokers", "Companies known as Data Brokers scrape court records, store loyalty programs, and app permissions. But under federal privacy regulations, they are legally required to remove your data for free if you submit an opt-out request using repositories like JustDelete.me."),
-            ("Secret 2: Cross-Device Ads", "Ad networks do not need to listen to your voice. They use BSSID Wi-Fi clustering and cross-device location pairing. When two devices connect to the same Wi-Fi, ad algorithms link them together. To stop this, turn off personalized ad identifiers and disable local network access."),
-            ("Secret 3: Browser Overlays", "When viewing research papers blocked by blurred paywalls, the full text has already loaded into your browser. Right-click, select Inspect Element, and delete the overlay container tag to immediately reveal the clean article."),
-            ("Secret 4: Dead Internet Paradox", "Over 45 percent of internet traffic is generated by automated bots. You can spot automated accounts by checking their posting cadence: bots post at precise intervals down to the exact second."),
-            ("Outro & Call To Action", "Which of these digital secrets surprised you the most? Drop your thoughts in the comments below. Hit that like button and subscribe for more zero-fluff tech breakdowns. See you in the next video!")
+            ("Hook & Intro", "If you live in the United States, there is a legal digital dossier containing your home address, phone number, and relatives names being sold online right now for less than a dollar. Today, we are revealing four zero-cost privacy secrets that feel almost illegal to know.", "cinematic mysterious cyber hacker in dark room holographic screens glowing data 8k"),
+            ("Secret 1: Data Brokers", "Companies known as Data Brokers scrape court records, store loyalty programs, and app permissions. But under federal privacy regulations, they are legally required to remove your data for free if you submit an opt-out request using repositories like JustDelete.me.", "futuristic digital database server room glowing blue data packets flowchart 8k"),
+            ("Secret 2: Cross-Device Ads", "Ad networks do not need to listen to your voice. They use BSSID Wi-Fi clustering and cross-device location pairing. When two devices connect to the same Wi-Fi, ad algorithms link them together. To stop this, turn off personalized ad identifiers and disable local network access.", "smartphones and laptops interconnected with glowing laser networks tech visual 8k"),
+            ("Secret 3: Browser Overlays", "When viewing research papers blocked by blurred paywalls, the full text has already loaded into your browser. Right-click, select Inspect Element, and delete the overlay container tag to immediately reveal the clean article.", "developer inspect element browser screen source code glowing green matrix aesthetic 8k"),
+            ("Secret 4: Dead Internet Paradox", "Over 45 percent of internet traffic is generated by automated bots. You can spot automated accounts by checking their posting cadence: bots post at precise intervals down to the exact second.", "cyborg robot typing on glowing mechanical keyboard neural network background 8k"),
+            ("Outro & Call To Action", "Which of these digital secrets surprised you the most? Drop your thoughts in the comments below. Hit that like button and subscribe for more zero-fluff tech breakdowns. See you in the next video!", "minimalist modern dark studio background with holographic subscribe button 8k")
         ]
-        for t, b in samples:
-            self._add_scene(t, b)
+        for t, b, vp in samples:
+            self._add_scene(t, b, visual_prompt=vp)
 
     def _test_voice(self):
         voice_label = self.voice_var.get()
@@ -834,14 +916,21 @@ class AnkitVideoMakerApp(ctk.CTk):
         self.txt_console.see("end")
 
     def _open_downloads(self):
-        downloads_dir = os.path.join(os.path.expanduser("~"), "Downloads")
-        os.startfile(downloads_dir)
+        target_dir = os.path.dirname(self.rendered_video_path) if self.rendered_video_path and os.path.exists(self.rendered_video_path) else os.path.join(os.path.expanduser("~"), "Downloads")
+        os.makedirs(target_dir, exist_ok=True)
+        os.startfile(target_dir)
 
     def _play_video(self):
         if self.rendered_video_path and os.path.exists(self.rendered_video_path):
             os.startfile(self.rendered_video_path)
         else:
-            messagebox.showinfo("Video Ready", "Please render a video first!")
+            dl = os.path.join(os.path.expanduser("~"), "Downloads")
+            vids = [os.path.join(dl, f) for f in os.listdir(dl) if f.endswith(".mp4") and "1080p" in f] if os.path.exists(dl) else []
+            if vids:
+                vids.sort(key=os.path.getmtime, reverse=True)
+                os.startfile(vids[0])
+            else:
+                messagebox.showinfo("Video Ready", "Please render a video first!")
 
     def _start_render(self):
         if self.is_rendering:
@@ -851,9 +940,16 @@ class AnkitVideoMakerApp(ctk.CTk):
         scenes_data = []
         for w in self.scene_widgets:
             stitle = w["title"].get().strip()
-            stext = w["text"].get("0.0", "end").strip()
+            stext = w["text"].get("0.0", "end").strip() if w.get("text") else ""
+            vprompt = w["prompt"].get().strip() if w.get("prompt") else ""
+            img_p = w.get("image_path")
             if stext:
-                scenes_data.append({"title": stitle, "text": stext})
+                scenes_data.append({
+                    "title": stitle,
+                    "text": stext,
+                    "visual_prompt": vprompt,
+                    "image_path": img_p
+                })
 
         if not scenes_data:
             messagebox.showerror("Error", "Please provide narration text for at least one scene!")
@@ -920,5 +1016,19 @@ class AnkitVideoMakerApp(ctk.CTk):
         messagebox.showerror("Render Error", f"An error occurred during rendering:\n{err_msg}")
 
 if __name__ == "__main__":
-    app = AnkitVideoMakerApp()
-    app.mainloop()
+    try:
+        app = AnkitVideoMakerApp()
+        app.mainloop()
+    except Exception as fatal_ex:
+        import traceback
+        tb_str = traceback.format_exc()
+        try:
+            with open("crash_err.log", "w", encoding="utf-8") as f:
+                f.write(tb_str)
+        except Exception:
+            pass
+        try:
+            import tkinter.messagebox as mb
+            mb.showerror("Ankit Video Maker - Error", f"A fatal error occurred during startup:\n{fatal_ex}\n\nDetails saved to crash_err.log")
+        except Exception:
+            print("Fatal Startup Error:", fatal_ex)

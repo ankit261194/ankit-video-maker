@@ -143,27 +143,49 @@ def render_full_project(project_data, progress_callback=None, log_callback=None)
         
         # Merge Audio (85% VO / 15% BGM) & Burn Subtitles
         sc_final = os.path.join(temp_dir, f"sc{sc_num}_final.mp4")
-        escaped_srt = os.path.abspath(sc["srt_path"]).replace('\\', '/').replace(':', r'\:')
+        srt_rel = os.path.basename(sc["srt_path"])
+        shot_rel = os.path.basename(shot_mp4)
+        audio_rel = os.path.basename(sc["audio_path"])
+        bgm_rel = os.path.basename(bgm_path)
+        final_rel = os.path.basename(sc_final)
+
         filter_graph = (
-            f"subtitles='{escaped_srt}':force_style='FontName=Segoe UI,FontSize=28,Bold=1,"
-            f"PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BackColour=&H80000000,"
-            f"BorderStyle=3,MarginV=50'[v];"
+            f"subtitles={srt_rel}:force_style='FontName=Segoe UI,FontSize=28,Bold=1,"
+            f"PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=3,MarginV=50'[v];"
             f"[1:a]aresample=44100,aformat=channel_layouts=stereo,volume=0.85[vo];"
             f"[2:a]volume=0.15[bgm];"
             f"[vo][bgm]amix=inputs=2:duration=first:dropout_transition=2[a]"
         )
         cmd_merge = [
             FFMPEG, "-y",
-            "-i", shot_mp4,
-            "-i", sc["audio_path"],
-            "-ss", str(sc["bgm_offset"]), "-t", str(dur), "-i", bgm_path,
+            "-i", shot_rel,
+            "-i", audio_rel,
+            "-ss", str(sc["bgm_offset"]), "-t", str(dur), "-i", bgm_rel,
             "-filter_complex", filter_graph,
             "-map", "[v]", "-map", "[a]",
             "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
             "-c:a", "aac", "-b:a", "192k",
-            sc_final
+            final_rel
         ]
-        subprocess.run(cmd_merge, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            subprocess.run(cmd_merge, cwd=temp_dir, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            log(f"   [Subtitles] 1080p dynamic subtitles burned successfully for Scene {sc_num}")
+        except subprocess.CalledProcessError:
+            # Fallback in case subtitle engine fails
+            log(f"   [Note] Applied audio-video merge without subtitles for Scene {sc_num}")
+            cmd_fallback = [
+                FFMPEG, "-y",
+                "-i", shot_rel,
+                "-i", audio_rel,
+                "-ss", str(sc["bgm_offset"]), "-t", str(dur), "-i", bgm_rel,
+                "-filter_complex", "[1:a]aresample=44100,aformat=channel_layouts=stereo,volume=0.85[vo];[2:a]volume=0.15[bgm];[vo][bgm]amix=inputs=2:duration=first:dropout_transition=2[a]",
+                "-map", "0:v", "-map", "[a]",
+                "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+                "-c:a", "aac", "-b:a", "192k",
+                final_rel
+            ]
+            subprocess.run(cmd_fallback, cwd=temp_dir, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
         scene_mp4s.append(sc_final)
         
         set_progress(0.35 + 0.50 * (sc_num / len(processed_scenes)))
@@ -172,15 +194,27 @@ def render_full_project(project_data, progress_callback=None, log_callback=None)
     # 4. Master Lossless Concat
     log("\n-> Assembling all scenes into Master Full HD 1080p Video...")
     concat_list = os.path.join(temp_dir, "concat.txt")
-    with open(concat_list, "w") as f:
+    with open(concat_list, "w", encoding="utf-8") as f:
         for sf in scene_mp4s:
             f.write(f"file '{sf.replace(chr(92), '/')}'\n")
-            
+
+    target_video_path = final_video_path
+    if os.path.exists(target_video_path):
+        try:
+            with open(target_video_path, "a+b"):
+                pass
+        except IOError:
+            import time
+            base_dir = os.path.dirname(final_video_path)
+            fn, ext = os.path.splitext(os.path.basename(final_video_path))
+            target_video_path = os.path.join(base_dir, f"{fn}_{int(time.time())}{ext}")
+            log(f"   [Notice] Existing video file was open/locked, saving as: {os.path.basename(target_video_path)}")
+
     cmd_concat = [
         FFMPEG, "-y",
         "-f", "concat", "-safe", "0", "-i", concat_list,
         "-c", "copy",
-        final_video_path
+        target_video_path
     ]
     subprocess.run(cmd_concat, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     set_progress(0.92)
@@ -192,8 +226,8 @@ def render_full_project(project_data, progress_callback=None, log_callback=None)
     
     log(f"\n==================================================")
     log(f"EXPORT COMPLETE!")
-    log(f"[VIDEO] Path: {final_video_path} ({os.path.getsize(final_video_path)/(1024*1024):.2f} MB)")
+    log(f"[VIDEO] Path: {target_video_path} ({os.path.getsize(target_video_path)/(1024*1024):.2f} MB)")
     log(f"[SEO KIT] Path: {seo_file}")
     log(f"==================================================")
     
-    return final_video_path, seo_file
+    return target_video_path, seo_file

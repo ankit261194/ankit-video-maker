@@ -1,15 +1,20 @@
-﻿import sys
+import os
+import sys
+
+# Prevent OpenBLAS / MKL memory allocation errors on Windows
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+os.environ["OMP_NUM_THREADS"] = "1"
+
 import subprocess
 import importlib
-import os
 
 # Essential dependencies mapping: (import_name, pip_package_name)
 REQUIRED_PACKAGES = [
     ("customtkinter", "customtkinter"),
     ("edge_tts", "edge-tts"),
     ("imageio_ffmpeg", "imageio-ffmpeg"),
-    ("scipy", "scipy"),
-    ("numpy", "numpy"),
     ("PIL", "pillow"),
     ("google.genai", "google-genai"),
     ("requests", "requests")

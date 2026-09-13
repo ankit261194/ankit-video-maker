@@ -5,7 +5,7 @@ import zipfile
 import tempfile
 import urllib.request
 
-CURRENT_VERSION = "2.5.0"
+CURRENT_VERSION = "2.6.0"
 CONFIG_PATH = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "AnkitVideoMaker", "cloud_config.json")
 
 DEFAULT_CLOUD_REPO = "ankit261194/ankit-video-maker" # Default cloud repository channel

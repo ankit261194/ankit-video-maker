@@ -1,6 +1,5 @@
 import os
 from PIL import Image, ImageDraw, ImageFilter, ImageEnhance
-import numpy as np
 
 def create_circular_avatar(image_path, size=(450, 450), glow_color=(0, 230, 255)):
     """
@@ -141,3 +140,20 @@ def fetch_ai_visual_frame(prompt_text, output_path, fallback_title="SCENE", fall
     # Fallback to procedural cyber canvas
     generate_procedural_cyber_canvas(fallback_title, fallback_subtitle, output_path)
     return False
+
+def create_thumbnail(image_path, thumb_path, size=(160, 90)):
+    """
+    Creates a high-quality 16:9 thumbnail for GUI scene preview.
+    """
+    try:
+        os.makedirs(os.path.dirname(thumb_path), exist_ok=True)
+        img = Image.open(image_path).convert("RGB")
+        img.thumbnail(size, Image.Resampling.LANCZOS)
+        thumb = Image.new("RGB", size, (10, 15, 25))
+        pos_x = (size[0] - img.width) // 2
+        pos_y = (size[1] - img.height) // 2
+        thumb.paste(img, (pos_x, pos_y))
+        thumb.save(thumb_path, "JPEG", quality=85)
+        return thumb_path
+    except Exception:
+        return None
