@@ -90,14 +90,17 @@ def check_cloud_update(repo_name=None):
     def parse_v(v):
         return [int(x) for x in v.split(".") if x.isdigit()]
 
+    candidates = []
+
+    # 1. Check formal GitHub Releases
     try:
+        api_url = f"https://api.github.com/repos/{repo_name}/releases/latest"
+        req = urllib.request.Request(api_url, headers={"User-Agent": "AVM-Official-Cloud-Sync/2.6"})
         with urllib.request.urlopen(req, timeout=8) as response:
             if response.status == 200:
                 data = json.loads(response.read().decode("utf-8"))
-                latest_tag = data.get("tag_name", "").replace("v", "").strip()
-                notes = data.get("body", "Official performance improvements and enhancements.")
-                
-                # Check for zipball or asset
+                rel_tag = data.get("tag_name", "").replace("v", "").strip()
+                rel_notes = data.get("body", "Official performance improvements and enhancements.")
                 download_url = None
                 assets = data.get("assets", [])
                 if assets:
@@ -107,34 +110,37 @@ def check_cloud_update(repo_name=None):
                             break
                     if not download_url:
                         download_url = assets[0].get("browser_download_url")
-                
                 if not download_url:
                     download_url = data.get("zipball_url")
-
-                try:
-                    is_newer = parse_v(latest_tag) > parse_v(CURRENT_VERSION)
-                except Exception:
-                    is_newer = latest_tag > CURRENT_VERSION
-
-                return is_newer, latest_tag, download_url, notes
+                if rel_tag and download_url:
+                    candidates.append((rel_tag, download_url, rel_notes))
     except Exception:
-        # Fallback to tags endpoint if formal release isn't published yet
+        pass
+
+    # 2. Check Git Tags (immediately picks up published tags)
+    try:
+        tags_url = f"https://api.github.com/repos/{repo_name}/tags"
+        tags_req = urllib.request.Request(tags_url, headers={"User-Agent": "AVM-Official-Cloud-Sync/2.6"})
+        with urllib.request.urlopen(tags_req, timeout=8) as t_res:
+            if t_res.status == 200:
+                tags_data = json.loads(t_res.read().decode("utf-8"))
+                if tags_data and len(tags_data) > 0:
+                    top_tag = tags_data[0].get("name", "").replace("v", "").strip()
+                    zip_url = tags_data[0].get("zipball_url")
+                    if top_tag and zip_url:
+                        candidates.append((top_tag, zip_url, "Official AVM Cloud Network Update - Core Enhancements & Optimization"))
+    except Exception:
+        pass
+
+    if candidates:
+        def v_key(item):
+            return [int(x) for x in item[0].split(".") if x.isdigit()]
+        best_ver, best_url, best_notes = max(candidates, key=v_key)
         try:
-            tags_url = f"https://api.github.com/repos/{repo_name}/tags"
-            tags_req = urllib.request.Request(tags_url, headers={"User-Agent": "AVM-Official-Cloud-Sync/2.5"})
-            with urllib.request.urlopen(tags_req, timeout=8) as t_res:
-                if t_res.status == 200:
-                    tags_data = json.loads(t_res.read().decode("utf-8"))
-                    if tags_data and len(tags_data) > 0:
-                        top_tag = tags_data[0].get("name", "").replace("v", "").strip()
-                        zip_url = tags_data[0].get("zipball_url")
-                        try:
-                            is_newer = parse_v(top_tag) > parse_v(CURRENT_VERSION)
-                        except Exception:
-                            is_newer = top_tag > CURRENT_VERSION
-                        return is_newer, top_tag, zip_url, "Official performance improvements and enhancements."
-        except Exception as e:
-            return False, CURRENT_VERSION, None, str(e)
+            is_newer = parse_v(best_ver) > parse_v(CURRENT_VERSION)
+        except Exception:
+            is_newer = best_ver > CURRENT_VERSION
+        return is_newer, best_ver, best_url, best_notes
 
     return False, CURRENT_VERSION, None, "Up to date"
 
