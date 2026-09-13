@@ -1,0 +1,26 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# STRICT SECURITY: Admin Tools & Key Generator (NEVER PUSH TO CLOUD / REPO)
+admin_tools/
+*key_generator*
+*publisher*
+
+# Local user data, license credentials & accounts vault
+output/
+assets/temp/
+*.dat
+*vault*.json
+*config*.json
+*.log
+err.log
+out.log
+test_*
+
+# Operating System Files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
